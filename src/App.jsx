@@ -3,7 +3,9 @@ import './App.css'
 import ImageUploader from './components/ImageUploader'
 import DetectionCanvas from './components/DetectionCanvas'
 import ResultsPanel from './components/ResultsPanel'
+import ClassFilter from './components/ClassFilter'
 import { BACKENDS, getBackend, runDetection } from './lib/detect'
+import { COCO_CLASSES } from './lib/cocoClasses'
 
 const EMPTY_RESULT = {
   image: null,
@@ -20,6 +22,7 @@ export default function App() {
 
   const [minConfidence, setMinConfidence] = useState(0.5)
   const [maxResults, setMaxResults] = useState(20)
+  const [selectedClasses, setSelectedClasses] = useState(() => new Set(COCO_CLASSES))
 
   const imageUrlRef = useRef(null)
 
@@ -86,9 +89,9 @@ export default function App() {
   const detections = useMemo(
     () =>
       result.detections
-        .filter((d) => d.score >= minConfidence)
+        .filter((d) => d.score >= minConfidence && selectedClasses.has(d.class))
         .slice(0, maxResults),
-    [result.detections, minConfidence, maxResults],
+    [result.detections, minConfidence, maxResults, selectedClasses],
   )
 
   const statusLabel = error ? 'error' : !imageEl ? 'idle' : busy ? 'detecting…' : 'ready'
@@ -173,6 +176,8 @@ export default function App() {
                   />
                 </label>
               </section>
+
+              <ClassFilter selected={selectedClasses} onChange={setSelectedClasses} />
 
               <ResultsPanel
                 detections={detections}
