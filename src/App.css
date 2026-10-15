@@ -55,6 +55,17 @@
   border-color: rgba(255, 107, 107, 0.4);
 }
 
+.backend--loading {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.app__badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* Alerts */
 .alert {
   background: rgba(255, 107, 107, 0.12);
@@ -241,18 +252,35 @@
 }
 
 .field select,
+.field textarea,
 .field input[type='range'] {
   width: 100%;
   accent-color: var(--accent);
 }
 
-.field select {
+.field select,
+.field textarea {
   font: inherit;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 54px;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.btn--block {
+  width: 100%;
+  margin-top: 16px;
 }
 
 /* Detections */

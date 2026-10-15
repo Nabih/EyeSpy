@@ -1,0 +1,88 @@
+import * as ort from 'onnxruntime-web'
+import { imageToCanvas } from '../canvas.js'
+import { COCO_CLASSES } from '../cocoClasses.js'
+import { YOLO_INPUT_SIZE, letterboxTransform, decodeYolo } from './yoloPost.js'
+
+ort.env.wasm.numThreads = 1
+ort.env.wasm.wasmPaths = {
+  mjs: `${import.meta.env.BASE_URL}ort/ort-wasm-simd-threaded.mjs`,
+  wasm: `${import.meta.env.BASE_URL}ort/ort-wasm-simd-threaded.wasm`,
+}
+
+const MODEL_URL = `${import.meta.env.BASE_URL}models/yolov8n.onnx`
+
+let sessionPromise = null
+
+export function preload() {
+  if (!sessionPromise) {
+    sessionPromise = ort.InferenceSession.create(MODEL_URL, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    })
+  }
+  return sessionPromise
+}
+
+function preprocess(image) {
+  const source = imageToCanvas(image)
+  const t = letterboxTransform(source.width, source.height, YOLO_INPUT_SIZE)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = YOLO_INPUT_SIZE
+  canvas.height = YOLO_INPUT_SIZE
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  ctx.fillStyle = 'rgb(114, 114, 114)'
+  ctx.fillRect(0, 0, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE)
+  ctx.drawImage(source, t.padX, t.padY, t.newW, t.newH)
+
+  const { data } = ctx.getImageData(0, 0, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE)
+  const area = YOLO_INPUT_SIZE * YOLO_INPUT_SIZE
+  const tensor = new Float32Array(3 * area)
+  for (let i = 0; i < area; i++) {
+    tensor[i] = data[i * 4] / 255
+    tensor[area + i] = data[i * 4 + 1] / 255
+    tensor[2 * area + i] = data[i * 4 + 2] / 255
+  }
+
+  return {
+    tensor,
+    srcWidth: source.width,
+    srcHeight: source.height,
+    scale: t.scale,
+    padX: t.padX,
+    padY: t.padY,
+  }
+}
+
+export async function detect(
+  image,
+  { confThreshold = 0.25, iouThreshold = 0.45, maxDetections = 100 } = {},
+) {
+  const session = await preload()
+  const prep = preprocess(image)
+
+  const feeds = {
+    images: new ort.Tensor('float32', prep.tensor, [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]),
+  }
+
+  const start = performance.now()
+  const results = await session.run(feeds)
+  const elapsed = performance.now() - start
+
+  const output = results[session.outputNames[0]].data
+
+  const detections = decodeYolo(output, {
+    classNames: COCO_CLASSES,
+    numAnchors: 8400,
+    confThreshold,
+    iouThreshold,
+    scale: prep.scale,
+    padX: prep.padX,
+    padY: prep.padY,
+    imgW: prep.srcWidth,
+    imgH: prep.srcHeight,
+    maxDetections,
+  })
+
+  return { elapsed, detections }
+}
