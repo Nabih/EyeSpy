@@ -1,58 +1,56 @@
-import * as tf from '@tensorflow/tfjs'
-import * as cocoSsd from '@tensorflow-models/coco-ssd'
-
-let model = null
-let loadedBackend = null
-
-export const AVAILABLE_BACKENDS = ['cpu', 'webgl']
-
 /**
- * Load (or reuse) the COCO-SSD model on the requested backend.
- * Defaults to the CPU backend so no GPU is required.
+ * Detection facade. Each backend lives in its own module so the heavy
+ * dependencies (TensorFlow.js, onnxruntime-web) are code-split and only
+ * fetched when the backend is first used.
  */
-export async function initDetector(backend = 'cpu') {
-  if (model && loadedBackend === backend) {
-    return { model, backend: loadedBackend }
-  }
 
-  await tf.setBackend(backend)
-  await tf.ready()
+export const BACKENDS = [
+  {
+    id: 'coco-cpu',
+    label: 'COCO-SSD · CPU',
+    family: 'coco',
+    options: { backend: 'cpu' },
+  },
+  {
+    id: 'coco-webgl',
+    label: 'COCO-SSD · WebGL',
+    family: 'coco',
+    options: { backend: 'webgl' },
+  },
+  {
+    id: 'yolo',
+    label: 'YOLOv8 · ONNX/WASM',
+    family: 'yolo',
+    options: {},
+  },
+]
 
-  model = await cocoSsd.load({ base: 'mobilenet_v2' })
-  loadedBackend = tf.getBackend()
+const LOADERS = {
+  coco: () => import('./detectors/coco.js'),
+  yolo: () => import('./detectors/yolo.js'),
+}
 
-  return { model, backend: loadedBackend }
+export function getBackend(id) {
+  return BACKENDS.find((b) => b.id === id) || BACKENDS[0]
 }
 
 /**
- * Run detection on an HTMLImageElement / HTMLCanvasElement / tensor.
- * Uses a very low min-score so the UI can filter by the confidence slider
- * without re-running the model.
+ * Warm up a backend's model (used to show a loading indicator).
  */
-export async function runDetection(image, { maxResults = 100, minConfidence = 0.05 } = {}) {
-  if (!model) throw new Error('Model has not been loaded yet')
-
-  const start = performance.now()
-  const raw = await model.detect(image, maxResults, minConfidence)
-  const elapsed = performance.now() - start
-
-  return {
-    elapsed,
-    detections: raw.map((p) => ({
-      class: p.class,
-      score: p.score,
-      bbox: {
-        x: p.bbox[0],
-        y: p.bbox[1],
-        width: p.bbox[2],
-        height: p.bbox[3],
-      },
-    })),
-  }
+export async function preload(id, onProgress) {
+  const info = getBackend(id)
+  const mod = await LOADERS[info.family]()
+  if (mod.preload) return mod.preload({ ...info.options, onProgress })
 }
 
-export function getBackend() {
-  return tf.getBackend()
+/**
+ * Run detection with the selected backend.
+ * Returns { detections: [{ class, score, bbox }], elapsed }.
+ */
+export async function runDetection(id, image, options = {}) {
+  const info = getBackend(id)
+  const mod = await LOADERS[info.family]()
+  return mod.detect(image, { ...info.options, ...options })
 }
 
 const PALETTE = [

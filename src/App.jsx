@@ -3,36 +3,27 @@ import './App.css'
 import ImageUploader from './components/ImageUploader'
 import DetectionCanvas from './components/DetectionCanvas'
 import ResultsPanel from './components/ResultsPanel'
-import { AVAILABLE_BACKENDS, initDetector, runDetection } from './lib/detect'
+import { BACKENDS, getBackend, runDetection } from './lib/detect'
 
-const EMPTY_RESULT = { image: null, backend: null, detections: [], elapsed: null }
+const EMPTY_RESULT = {
+  image: null,
+  backend: null,
+  detections: [],
+  elapsed: null,
+}
 
 export default function App() {
-  const [backend, setBackend] = useState('cpu')
-  const [status, setStatus] = useState('loading')
-  const [error, setError] = useState(null)
-
+  const [backend, setBackend] = useState('coco-cpu')
   const [imageEl, setImageEl] = useState(null)
   const [result, setResult] = useState(EMPTY_RESULT)
+  const [error, setError] = useState(null)
 
   const [minConfidence, setMinConfidence] = useState(0.5)
   const [maxResults, setMaxResults] = useState(20)
 
   const imageUrlRef = useRef(null)
 
-  useEffect(() => {
-    let cancelled = false
-    initDetector(backend)
-      .then(() => !cancelled && setStatus('ready'))
-      .catch((err) => {
-        if (cancelled) return
-        setError(err.message)
-        setStatus('error')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [backend])
+  const backendInfo = getBackend(backend)
 
   const loadImage = useCallback((url, { revoke = false } = {}) => {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current)
@@ -55,12 +46,6 @@ export default function App() {
     [loadImage],
   )
 
-  const handleBackendChange = useCallback((next) => {
-    setError(null)
-    setStatus('loading')
-    setBackend(next)
-  }, [])
-
   const reset = useCallback(() => {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current)
     imageUrlRef.current = null
@@ -69,10 +54,15 @@ export default function App() {
     setError(null)
   }, [])
 
+  const handleBackendChange = useCallback((next) => {
+    setError(null)
+    setBackend(next)
+  }, [])
+
   useEffect(() => {
-    if (!imageEl || status !== 'ready') return
+    if (!imageEl) return
     let cancelled = false
-    runDetection(imageEl, { maxResults: 100, minConfidence: 0.05 })
+    runDetection(backend, imageEl)
       .then((res) => {
         if (cancelled) return
         setResult({
@@ -82,16 +72,16 @@ export default function App() {
           elapsed: res.elapsed,
         })
       })
-      .catch((err) => !cancelled && setError(err.message))
+      .catch((err) => {
+        if (cancelled) return
+        setError(err.message)
+      })
     return () => {
       cancelled = true
     }
-  }, [imageEl, status, backend])
+  }, [imageEl, backend])
 
-  const busy =
-    !!imageEl &&
-    status === 'ready' &&
-    (result.image !== imageEl || result.backend !== backend)
+  const busy = !!imageEl && (result.image !== imageEl || result.backend !== backend)
 
   const detections = useMemo(
     () =>
@@ -101,20 +91,23 @@ export default function App() {
     [result.detections, minConfidence, maxResults],
   )
 
+  const statusLabel = error ? 'error' : !imageEl ? 'idle' : busy ? 'detecting…' : 'ready'
+
   return (
     <div className="app">
       <header className="app__header">
         <div>
           <h1 className="app__title">EyeSpy</h1>
           <p className="app__tagline">
-            CPU object detection in your browser — no GPU, no uploads
+            Object detection in your browser — runs locally, no uploads
           </p>
         </div>
-        <span className={`backend backend--${status}`}>
-          {status === 'loading' && 'Loading model…'}
-          {status === 'ready' && `ready · ${backend.toUpperCase()}`}
-          {status === 'error' && 'model failed'}
-        </span>
+        <div className="app__badges">
+          <span className="backend">{backendInfo.label}</span>
+          <span className={`backend backend--${error ? 'error' : busy ? 'loading' : 'ready'}`}>
+            {statusLabel}
+          </span>
+        </div>
       </header>
 
       {error && (
@@ -125,11 +118,7 @@ export default function App() {
 
       <main className={`app__main${imageEl ? ' app__main--split' : ''}`}>
         {!imageEl ? (
-          <ImageUploader
-            disabled={status !== 'ready'}
-            onSelect={handleSelect}
-            onSample={handleSample}
-          />
+          <ImageUploader onSelect={handleSelect} onSample={handleSample} />
         ) : (
           <>
             <div className="stage">
@@ -141,18 +130,16 @@ export default function App() {
 
             <aside className="sidebar">
               <section className="panel">
-                <h2>Settings</h2>
+                <h2>Model &amp; settings</h2>
                 <label className="field">
-                  <span>
-                    Backend <strong>{backend.toUpperCase()}</strong>
-                  </span>
+                  <span>Backend</span>
                   <select
                     value={backend}
                     onChange={(e) => handleBackendChange(e.target.value)}
                   >
-                    {AVAILABLE_BACKENDS.map((b) => (
-                      <option key={b} value={b}>
-                        {b.toUpperCase()}
+                    {BACKENDS.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.label}
                       </option>
                     ))}
                   </select>
@@ -198,7 +185,7 @@ export default function App() {
       </main>
 
       <footer className="app__footer">
-        COCO-SSD · MobileNet v2 · 80 classes · all processing runs locally
+        COCO-SSD · YOLOv8 — all processing runs locally in your browser
       </footer>
     </div>
   )

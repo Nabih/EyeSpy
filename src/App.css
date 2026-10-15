@@ -55,6 +55,17 @@
   border-color: rgba(255, 107, 107, 0.4);
 }
 
+.backend--loading {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.app__badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* Alerts */
 .alert {
   background: rgba(255, 107, 107, 0.12);
