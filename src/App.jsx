@@ -4,6 +4,7 @@ import ImageUploader from './components/ImageUploader'
 import DetectionCanvas from './components/DetectionCanvas'
 import ResultsPanel from './components/ResultsPanel'
 import ClassFilter from './components/ClassFilter'
+import ExportPanel from './components/ExportPanel'
 import {
   BACKENDS,
   getBackend,
@@ -25,6 +26,7 @@ export default function App() {
   const [imageEl, setImageEl] = useState(null)
   const [result, setResult] = useState(EMPTY_RESULT)
   const [error, setError] = useState(null)
+  const [imageName, setImageName] = useState(null)
 
   const [minConfidence, setMinConfidence] = useState(0.5)
   const [maxResults, setMaxResults] = useState(20)
@@ -36,10 +38,11 @@ export default function App() {
   const backendClasses = useMemo(() => classesForBackend(backend), [backend])
   const backendCategories = useMemo(() => categoriesForBackend(backend), [backend])
 
-  const loadImage = useCallback((url, { revoke = false } = {}) => {
+  const loadImage = useCallback((url, { revoke = false, name = null } = {}) => {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current)
     imageUrlRef.current = revoke ? url : null
     setError(null)
+    setImageName(name)
     setResult(EMPTY_RESULT)
     const img = new Image()
     img.onload = () => setImageEl(img)
@@ -48,12 +51,12 @@ export default function App() {
   }, [])
 
   const handleSelect = useCallback(
-    (file) => loadImage(URL.createObjectURL(file), { revoke: true }),
+    (file) => loadImage(URL.createObjectURL(file), { revoke: true, name: file.name }),
     [loadImage],
   )
 
   const handleSample = useCallback(
-    () => loadImage(`${import.meta.env.BASE_URL}sample-cat.jpg`),
+    () => loadImage(`${import.meta.env.BASE_URL}sample-cat.jpg`, { name: 'sample-cat.jpg' }),
     [loadImage],
   )
 
@@ -61,6 +64,7 @@ export default function App() {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current)
     imageUrlRef.current = null
     setImageEl(null)
+    setImageName(null)
     setResult(EMPTY_RESULT)
     setError(null)
   }, [])
@@ -206,6 +210,13 @@ export default function App() {
                 detections={detections}
                 elapsed={result.elapsed}
                 busy={busy}
+              />
+
+              <ExportPanel
+                image={imageEl}
+                detections={detections}
+                meta={{ name: imageName, backend: backendInfo.label, elapsed: result.elapsed }}
+                disabled={busy}
               />
             </aside>
           </>
