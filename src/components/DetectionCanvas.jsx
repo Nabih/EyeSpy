@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { colorForClass } from '../lib/detect'
+import { layoutLabels } from '../lib/labelLayout'
 
 export default function DetectionCanvas({ image, detections }) {
   const canvasRef = useRef(null)
@@ -21,25 +22,25 @@ export default function DetectionCanvas({ image, detections }) {
     ctx.font = `600 ${fontSize}px system-ui, sans-serif`
     ctx.textBaseline = 'top'
 
+    // Boxes first, so a later outline never crosses an earlier label.
     detections.forEach((d) => {
-      const { x, y, width, height } = d.bbox
-      const color = colorForClass(d.class)
+      ctx.strokeStyle = colorForClass(d.class)
+      ctx.strokeRect(d.bbox.x, d.bbox.y, d.bbox.width, d.bbox.height)
+    })
 
-      ctx.strokeStyle = color
-      ctx.strokeRect(x, y, width, height)
+    // Then labels, nudged down so they never overlap each other.
+    const labels = layoutLabels(detections, {
+      measure: (text) => ctx.measureText(text).width,
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      fontSize,
+    })
 
-      const label = `${d.class} ${(d.score * 100).toFixed(0)}%`
-      const textWidth = ctx.measureText(label).width
-      const padX = fontSize * 0.4
-      const padY = fontSize * 0.25
-      const boxH = fontSize + padY * 2
-      const labelY = y - boxH < 0 ? y : y - boxH
-
-      ctx.fillStyle = color
-      ctx.fillRect(x, labelY, textWidth + padX * 2, boxH)
-
+    labels.forEach((l, i) => {
+      ctx.fillStyle = colorForClass(detections[i].class)
+      ctx.fillRect(l.x, l.y, l.width, l.height)
       ctx.fillStyle = '#000'
-      ctx.fillText(label, x + padX, labelY + padY)
+      ctx.fillText(l.label, l.x + l.padX, l.y + l.padY)
     })
   }, [image, detections])
 
