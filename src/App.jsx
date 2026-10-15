@@ -125,7 +125,15 @@ export default function App() {
         ) : (
           <>
             <div className="stage">
-              <DetectionCanvas image={imageEl} detections={detections} />
+              <div className="stage__frame">
+                <DetectionCanvas image={imageEl} detections={busy ? [] : detections} />
+                {busy && (
+                  <div className="stage__overlay" role="status" aria-live="polite">
+                    <span className="spinner" aria-hidden="true" />
+                    <span>Detecting with {backendInfo.label}…</span>
+                  </div>
+                )}
+              </div>
               <button className="btn btn--ghost" onClick={reset}>
                 Choose another image
               </button>

@@ -184,6 +184,11 @@
   align-self: flex-start;
 }
 
+.stage__frame {
+  position: relative;
+  width: 100%;
+}
+
 .detection-canvas {
   width: 100%;
   height: auto;
@@ -192,6 +197,45 @@
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.stage__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  text-align: center;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 58%, transparent);
+  backdrop-filter: blur(2px);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--text) 25%, transparent);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2s;
+  }
 }
 
 /* Sidebar */
