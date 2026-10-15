@@ -11,7 +11,11 @@ selectable detection backends:
 | --- | --- | --- |
 | **COCO-SSD · CPU** | TensorFlow.js COCO-SSD (MobileNet v2) | Default. 80 classes, pure CPU. |
 | **COCO-SSD · WebGL** | Same model, GPU backend | Faster where WebGL is available. |
-| **YOLOv8 · ONNX/WASM** | YOLOv8n (ONNX Runtime Web) | 80 classes, runs on the WASM execution provider. |
+| **YOLOv8n · COCO** | YOLOv8n (ONNX Runtime Web) | 80 classes, runs on the WASM execution provider. |
+
+The YOLO row comes from the model registry in
+`src/lib/detectors/yoloModels.js`, so you can add your own models — see
+[Adding your own subjects](#adding-your-own-subjects).
 
 ## Features
 
@@ -20,7 +24,10 @@ selectable detection backends:
 - Drag & drop or file picker, plus a bundled sample image
 - Bounding boxes drawn on a canvas with per-class colours
 - Live confidence-threshold and max-results controls
+- Classes filter — pick subjects by category, by name, or search; or select all
 - Per-image summary with detection counts by class, and inference time
+- Bring your own model: register a self-trained YOLO model to detect your own
+  subjects (see [Adding your own subjects](#adding-your-own-subjects))
 
 ## Getting started
 
@@ -48,12 +55,17 @@ npm run preview
   dynamically, so TensorFlow.js and onnxruntime-web are code-split and only
   downloaded when that backend is first used.
 - `src/lib/detectors/coco.js` — TensorFlow.js COCO-SSD.
-- `src/lib/detectors/yolo.js` — YOLOv8n via onnxruntime-web: letterbox
-  preprocessing, raw-tensor decoding and class-wise NMS (`yoloPost.js`).
+- `src/lib/detectors/yolo.js` — any registered YOLO model via onnxruntime-web:
+  letterbox preprocessing, raw-tensor decoding and class-wise NMS
+  (`yoloPost.js`). Models come from `src/lib/detectors/yoloModels.js`, one
+  backend per entry.
+- `classesForBackend(id)` / `categoriesForBackend(id)` in `detect.js` give the
+  active backend's class list (and optional categories) for the Classes filter.
 - `src/App.jsx` loads the image into an `HTMLImageElement`, runs detection, and
-  keeps raw predictions so the confidence slider filters instantly.
+  keeps raw predictions so the confidence and class filters update instantly.
 - `src/components/DetectionCanvas.jsx` renders the image and boxes;
-  `src/components/ResultsPanel.jsx` lists detections and the summary.
+  `src/components/ResultsPanel.jsx` lists detections and the summary;
+  `src/components/ClassFilter.jsx` is the class/subject picker.
 
 ### Model & WASM hosting
 
@@ -62,6 +74,55 @@ npm run preview
 - onnxruntime-web is imported via its `/wasm` subpath, so Vite bundles the
   matching WASM binary as an asset and rewrites the runtime URL — no CDN and no
   manual WASM hosting required.
+
+## Adding your own subjects
+
+The COCO backends can only ever report the 80 COCO classes. To detect your own
+subjects, drop in a YOLO model trained on them — it becomes a selectable
+backend with its own class list and Classes filter.
+
+1. **Train** a YOLOv8 / YOLO11 detection model on your labelled images, e.g.
+   with [Ultralytics](https://docs.ultralytics.com):
+
+   ```bash
+   yolo detect train model=yolo11n.pt data=my-dataset.yaml imgsz=640
+   ```
+
+2. **Export** it to ONNX with a fixed square input (the standard Ultralytics
+   detection export — output shape `[1, 4 + numClasses, numAnchors]`, with no
+   objectness channel):
+
+   ```bash
+   yolo export model=runs/detect/train/weights/best.pt format=onnx imgsz=640 opset=12
+   ```
+
+3. **Copy** the resulting `.onnx` into `public/models/`.
+
+4. **Register** it in `src/lib/detectors/yoloModels.js` — add one entry with the
+   weight file's `url`, the `inputSize`, and a `labels` array (one name per
+   class, in training order):
+
+   ```js
+   {
+     id: 'my-model',
+     label: 'My model',
+     url: 'models/my-model.onnx',
+     inputSize: 640,
+     labels: ['forklift', 'pallet', 'wine bottle'],
+   }
+   ```
+
+That is the whole change — no other code edits. The model appears in the
+Backend dropdown and its labels populate the Classes filter. The number of decode
+anchors is derived from `inputSize` (640 → 8400, 320 → 2100); set `numAnchors`
+explicitly if you use a different scheme. Only the YOLOv8 / YOLO11 detection
+output format is supported (other exports, e.g. YOLOv5 with an objectness
+channel, are not).
+
+> Want to detect *anything* you describe at runtime, with no training? That
+> needs a zero-shot detector (OWLv2 / Grounding DINO) — much heavier and much
+> happier on WebGPU. It was prototyped here and removed as too heavy for the
+> WASM path.
 
 ## Notes
 

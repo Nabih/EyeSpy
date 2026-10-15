@@ -1,38 +1,44 @@
 import * as ort from 'onnxruntime-web/wasm'
 import { imageToCanvas } from '../canvas.js'
-import { COCO_CLASSES } from '../cocoClasses.js'
-import { YOLO_INPUT_SIZE, letterboxTransform, decodeYolo } from './yoloPost.js'
+import { letterboxTransform, decodeYolo } from './yoloPost.js'
+import { YOLO_MODELS, resolveModelUrl, numAnchorsOf } from './yoloModels.js'
 
 ort.env.wasm.numThreads = 1
 
-const MODEL_URL = `${import.meta.env.BASE_URL}models/yolov8n.onnx`
+const sessions = new Map()
 
-let sessionPromise = null
-
-export function preload() {
-  if (!sessionPromise) {
-    sessionPromise = ort.InferenceSession.create(MODEL_URL, {
-      executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all',
-    })
+function getSession(model) {
+  const url = resolveModelUrl(model)
+  if (!sessions.has(url)) {
+    sessions.set(
+      url,
+      ort.InferenceSession.create(url, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all',
+      }),
+    )
   }
-  return sessionPromise
+  return sessions.get(url)
 }
 
-function preprocess(image) {
+export function preload({ model = YOLO_MODELS[0] } = {}) {
+  return getSession(model)
+}
+
+function preprocess(image, size) {
   const source = imageToCanvas(image)
-  const t = letterboxTransform(source.width, source.height, YOLO_INPUT_SIZE)
+  const t = letterboxTransform(source.width, source.height, size)
 
   const canvas = document.createElement('canvas')
-  canvas.width = YOLO_INPUT_SIZE
-  canvas.height = YOLO_INPUT_SIZE
+  canvas.width = size
+  canvas.height = size
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
   ctx.fillStyle = 'rgb(114, 114, 114)'
-  ctx.fillRect(0, 0, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE)
+  ctx.fillRect(0, 0, size, size)
   ctx.drawImage(source, t.padX, t.padY, t.newW, t.newH)
 
-  const { data } = ctx.getImageData(0, 0, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE)
-  const area = YOLO_INPUT_SIZE * YOLO_INPUT_SIZE
+  const { data } = ctx.getImageData(0, 0, size, size)
+  const area = size * size
   const tensor = new Float32Array(3 * area)
   for (let i = 0; i < area; i++) {
     tensor[i] = data[i * 4] / 255
@@ -52,13 +58,14 @@ function preprocess(image) {
 
 export async function detect(
   image,
-  { confThreshold = 0.25, iouThreshold = 0.45, maxDetections = 100 } = {},
+  { model = YOLO_MODELS[0], confThreshold = 0.25, iouThreshold = 0.45, maxDetections = 100 } = {},
 ) {
-  const session = await preload()
-  const prep = preprocess(image)
+  const session = await getSession(model)
+  const size = model.inputSize
+  const prep = preprocess(image, size)
 
   const feeds = {
-    images: new ort.Tensor('float32', prep.tensor, [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]),
+    images: new ort.Tensor('float32', prep.tensor, [1, 3, size, size]),
   }
 
   const start = performance.now()
@@ -68,8 +75,8 @@ export async function detect(
   const output = results[session.outputNames[0]].data
 
   const detections = decodeYolo(output, {
-    classNames: COCO_CLASSES,
-    numAnchors: 8400,
+    classNames: model.labels,
+    numAnchors: numAnchorsOf(model),
     confThreshold,
     iouThreshold,
     scale: prep.scale,

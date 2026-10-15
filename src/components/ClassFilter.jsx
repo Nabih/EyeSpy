@@ -1,17 +1,19 @@
 import { useMemo, useState } from 'react'
-import { COCO_CATEGORIES, COCO_CLASSES } from '../lib/cocoClasses'
 
-export default function ClassFilter({ selected, onChange }) {
+export default function ClassFilter({ selected, onChange, classes, categories }) {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
 
-  const categories = useMemo(() => {
-    if (!q) return COCO_CATEGORIES
-    return COCO_CATEGORIES.map((c) => ({
-      ...c,
-      classes: c.classes.filter((name) => name.includes(q)),
-    })).filter((c) => c.classes.length > 0)
-  }, [q])
+  const groups = useMemo(() => {
+    const base =
+      categories && categories.length
+        ? categories
+        : [{ name: 'All classes', classes, flat: true }]
+    if (!q) return base
+    return base
+      .map((c) => ({ ...c, classes: c.classes.filter((name) => name.includes(q)) }))
+      .filter((c) => c.classes.length > 0)
+  }, [q, classes, categories])
 
   const toggleClass = (name) => {
     const next = new Set(selected)
@@ -20,10 +22,10 @@ export default function ClassFilter({ selected, onChange }) {
     onChange(next)
   }
 
-  const toggleCategory = (classes) => {
-    const allSelected = classes.every((c) => selected.has(c))
+  const toggleCategory = (names) => {
+    const allSelected = names.every((c) => selected.has(c))
     const next = new Set(selected)
-    for (const c of classes) {
+    for (const c of names) {
       if (allSelected) next.delete(c)
       else next.add(c)
     }
@@ -35,7 +37,7 @@ export default function ClassFilter({ selected, onChange }) {
       <div className="panel__head">
         <h2>Classes</h2>
         <span className="panel__timing">
-          {selected.size}/{COCO_CLASSES.length}
+          {selected.size}/{classes.length}
         </span>
       </div>
 
@@ -43,7 +45,7 @@ export default function ClassFilter({ selected, onChange }) {
         <button
           type="button"
           className="btn btn--mini"
-          onClick={() => onChange(new Set(COCO_CLASSES))}
+          onClick={() => onChange(new Set(classes))}
         >
           Select all
         </button>
@@ -65,24 +67,26 @@ export default function ClassFilter({ selected, onChange }) {
       />
 
       <div className="classfilter__list">
-        {categories.map((category) => {
-          const allSelected = category.classes.every((c) => selected.has(c))
-          const someSelected = category.classes.some((c) => selected.has(c))
+        {groups.map((group) => {
+          const allSelected = group.classes.every((c) => selected.has(c))
+          const someSelected = group.classes.some((c) => selected.has(c))
           return (
-            <div key={category.name} className="classfilter__group">
-              <label className="classfilter__category">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = !allSelected && someSelected
-                  }}
-                  onChange={() => toggleCategory(category.classes)}
-                />
-                <span>{category.name}</span>
-              </label>
+            <div key={group.name} className="classfilter__group">
+              {!group.flat && (
+                <label className="classfilter__category">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = !allSelected && someSelected
+                    }}
+                    onChange={() => toggleCategory(group.classes)}
+                  />
+                  <span>{group.name}</span>
+                </label>
+              )}
               <div className="classfilter__classes">
-                {category.classes.map((name) => (
+                {group.classes.map((name) => (
                   <label key={name} className="classfilter__item">
                     <input
                       type="checkbox"
@@ -96,7 +100,7 @@ export default function ClassFilter({ selected, onChange }) {
             </div>
           )
         })}
-        {categories.length === 0 && (
+        {groups.length === 0 && (
           <p className="muted">No classes match “{query}”.</p>
         )}
       </div>
