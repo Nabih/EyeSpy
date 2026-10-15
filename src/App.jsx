@@ -5,29 +5,11 @@ import DetectionCanvas from './components/DetectionCanvas'
 import ResultsPanel from './components/ResultsPanel'
 import { BACKENDS, getBackend, runDetection } from './lib/detect'
 
-const DEFAULT_LABELS = 'a photo of a cat, a photo of a dog'
 const EMPTY_RESULT = {
   image: null,
   backend: null,
-  labelsKey: '',
-  runId: -1,
   detections: [],
   elapsed: null,
-}
-
-function parseLabels(text) {
-  const seen = new Set()
-  return text
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter((s) => s && !seen.has(s) && seen.add(s))
-}
-
-function progressPercent(event) {
-  if (event?.status === 'progress' && typeof event.progress === 'number') {
-    return Math.round(event.progress)
-  }
-  return null
 }
 
 export default function App() {
@@ -35,19 +17,13 @@ export default function App() {
   const [imageEl, setImageEl] = useState(null)
   const [result, setResult] = useState(EMPTY_RESULT)
   const [error, setError] = useState(null)
-  const [progress, setProgress] = useState(null)
 
   const [minConfidence, setMinConfidence] = useState(0.5)
   const [maxResults, setMaxResults] = useState(20)
 
-  const [labelsText, setLabelsText] = useState(DEFAULT_LABELS)
-  const [committedLabels, setCommittedLabels] = useState(() => parseLabels(DEFAULT_LABELS))
-  const [runId, setRunId] = useState(0)
-
   const imageUrlRef = useRef(null)
 
   const backendInfo = getBackend(backend)
-  const labelsKey = committedLabels.join('\u0000')
 
   const loadImage = useCallback((url, { revoke = false } = {}) => {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current)
@@ -76,59 +52,36 @@ export default function App() {
     setImageEl(null)
     setResult(EMPTY_RESULT)
     setError(null)
-    setProgress(null)
   }, [])
 
   const handleBackendChange = useCallback((next) => {
     setError(null)
-    setProgress(null)
     setBackend(next)
   }, [])
-
-  const applyLabels = useCallback(() => {
-    setCommittedLabels(parseLabels(labelsText))
-    setRunId((r) => r + 1)
-  }, [labelsText])
 
   useEffect(() => {
     if (!imageEl) return
     let cancelled = false
-    runDetection(backend, imageEl, {
-      labels: labelsKey ? labelsKey.split('\u0000') : [],
-      onProgress: (event) => {
-        if (cancelled) return
-        const pct = progressPercent(event)
-        if (pct !== null) setProgress(pct)
-      },
-    })
+    runDetection(backend, imageEl)
       .then((res) => {
         if (cancelled) return
         setResult({
           image: imageEl,
           backend,
-          labelsKey,
-          runId,
           detections: res.detections,
           elapsed: res.elapsed,
         })
-        setProgress(null)
       })
       .catch((err) => {
         if (cancelled) return
         setError(err.message)
-        setProgress(null)
       })
     return () => {
       cancelled = true
     }
-  }, [imageEl, backend, labelsKey, runId])
+  }, [imageEl, backend])
 
-  const busy =
-    !!imageEl &&
-    (result.image !== imageEl ||
-      result.backend !== backend ||
-      result.labelsKey !== labelsKey ||
-      result.runId !== runId)
+  const busy = !!imageEl && (result.image !== imageEl || result.backend !== backend)
 
   const detections = useMemo(
     () =>
@@ -138,15 +91,7 @@ export default function App() {
     [result.detections, minConfidence, maxResults],
   )
 
-  const statusLabel = error
-    ? 'error'
-    : !imageEl
-      ? 'idle'
-      : busy
-        ? progress !== null
-          ? `loading ${progress}%`
-          : 'detecting…'
-        : 'ready'
+  const statusLabel = error ? 'error' : !imageEl ? 'idle' : busy ? 'detecting…' : 'ready'
 
   return (
     <div className="app">
@@ -200,21 +145,6 @@ export default function App() {
                   </select>
                 </label>
 
-                {backendInfo.needsLabels && (
-                  <label className="field">
-                    <span>Target labels (comma-separated)</span>
-                    <textarea
-                      rows={2}
-                      value={labelsText}
-                      onChange={(e) => setLabelsText(e.target.value)}
-                      placeholder="a photo of a cat, a photo of a dog"
-                    />
-                    <small className="hint">
-                      OWL-ViT matches text descriptions — try “a photo of …”.
-                    </small>
-                  </label>
-                )}
-
                 <label className="field">
                   <span>
                     Min confidence <strong>{minConfidence.toFixed(2)}</strong>
@@ -242,10 +172,6 @@ export default function App() {
                     onChange={(e) => setMaxResults(parseInt(e.target.value, 10))}
                   />
                 </label>
-
-                <button className="btn btn--ghost btn--block" type="button" onClick={applyLabels}>
-                  Run detection
-                </button>
               </section>
 
               <ResultsPanel
@@ -259,7 +185,7 @@ export default function App() {
       </main>
 
       <footer className="app__footer">
-        COCO-SSD · OWLv2 (zero-shot) · YOLOv8 — all processing runs locally in your browser
+        COCO-SSD · YOLOv8 — all processing runs locally in your browser
       </footer>
     </div>
   )

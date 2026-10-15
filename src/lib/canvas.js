@@ -1,6 +1,6 @@
 /**
  * Draw an HTMLImageElement (or canvas) into a new canvas at its natural size.
- * Used to feed detectors that expect a canvas / RawImage rather than an <img>.
+ * Used by the ONNX backend, which works on raw pixel data.
  */
 export function imageToCanvas(image) {
   const width = image.naturalWidth || image.width

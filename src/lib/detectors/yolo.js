@@ -1,13 +1,9 @@
-import * as ort from 'onnxruntime-web'
+import * as ort from 'onnxruntime-web/wasm'
 import { imageToCanvas } from '../canvas.js'
 import { COCO_CLASSES } from '../cocoClasses.js'
 import { YOLO_INPUT_SIZE, letterboxTransform, decodeYolo } from './yoloPost.js'
 
 ort.env.wasm.numThreads = 1
-ort.env.wasm.wasmPaths = {
-  mjs: `${import.meta.env.BASE_URL}ort/ort-wasm-simd-threaded.mjs`,
-  wasm: `${import.meta.env.BASE_URL}ort/ort-wasm-simd-threaded.wasm`,
-}
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/yolov8n.onnx`
 

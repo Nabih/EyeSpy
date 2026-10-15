@@ -1,7 +1,7 @@
 /**
  * Detection facade. Each backend lives in its own module so the heavy
- * dependencies (TensorFlow.js, transformers.js, onnxruntime-web) are
- * code-split and only fetched when the backend is first used.
+ * dependencies (TensorFlow.js, onnxruntime-web) are code-split and only
+ * fetched when the backend is first used.
  */
 
 export const BACKENDS = [
@@ -10,37 +10,23 @@ export const BACKENDS = [
     label: 'COCO-SSD · CPU',
     family: 'coco',
     options: { backend: 'cpu' },
-    zeroShot: false,
-    needsLabels: false,
   },
   {
     id: 'coco-webgl',
     label: 'COCO-SSD · WebGL',
     family: 'coco',
     options: { backend: 'webgl' },
-    zeroShot: false,
-    needsLabels: false,
-  },
-  {
-    id: 'zeroshot',
-    label: 'OWLv2 · zero-shot',
-    family: 'zeroshot',
-    zeroShot: true,
-    needsLabels: true,
   },
   {
     id: 'yolo',
     label: 'YOLOv8 · ONNX/WASM',
     family: 'yolo',
     options: {},
-    zeroShot: false,
-    needsLabels: false,
   },
 ]
 
 const LOADERS = {
   coco: () => import('./detectors/coco.js'),
-  zeroshot: () => import('./detectors/zeroshot.js'),
   yolo: () => import('./detectors/yolo.js'),
 }
 

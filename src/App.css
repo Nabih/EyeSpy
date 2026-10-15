@@ -252,35 +252,18 @@
 }
 
 .field select,
-.field textarea,
 .field input[type='range'] {
   width: 100%;
   accent-color: var(--accent);
 }
 
-.field select,
-.field textarea {
+.field select {
   font: inherit;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-}
-
-.field textarea {
-  resize: vertical;
-  min-height: 54px;
-}
-
-.hint {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.btn--block {
-  width: 100%;
-  margin-top: 16px;
 }
 
 /* Detections */
