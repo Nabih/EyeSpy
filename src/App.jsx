@@ -4,7 +4,13 @@ import ImageUploader from './components/ImageUploader'
 import DetectionCanvas from './components/DetectionCanvas'
 import ResultsPanel from './components/ResultsPanel'
 import ClassFilter from './components/ClassFilter'
-import { BACKENDS, getBackend, runDetection } from './lib/detect'
+import {
+  BACKENDS,
+  getBackend,
+  runDetection,
+  classesForBackend,
+  categoriesForBackend,
+} from './lib/detect'
 import { COCO_CLASSES } from './lib/cocoClasses'
 
 const EMPTY_RESULT = {
@@ -27,6 +33,8 @@ export default function App() {
   const imageUrlRef = useRef(null)
 
   const backendInfo = getBackend(backend)
+  const backendClasses = useMemo(() => classesForBackend(backend), [backend])
+  const backendCategories = useMemo(() => categoriesForBackend(backend), [backend])
 
   const loadImage = useCallback((url, { revoke = false } = {}) => {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current)
@@ -60,6 +68,8 @@ export default function App() {
   const handleBackendChange = useCallback((next) => {
     setError(null)
     setBackend(next)
+    // Each backend emits a different class set, so reset the filter to "all".
+    setSelectedClasses(new Set(classesForBackend(next)))
   }, [])
 
   useEffect(() => {
@@ -177,7 +187,12 @@ export default function App() {
                 </label>
               </section>
 
-              <ClassFilter selected={selectedClasses} onChange={setSelectedClasses} />
+              <ClassFilter
+                selected={selectedClasses}
+                onChange={setSelectedClasses}
+                classes={backendClasses}
+                categories={backendCategories}
+              />
 
               <ResultsPanel
                 detections={detections}
