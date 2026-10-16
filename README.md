@@ -64,34 +64,34 @@ panel appears once an image is loaded.)
 
 **1. Start** — the app opens on the Image tab with a drop zone.
 
-<img src="docs/demo/01-start.png" alt="EyeSpy start screen" width="720">
+<a href="docs/demo/01-start.png"><img src="docs/demo/01-start.png" alt="EyeSpy start screen" width="380"></a>
 
 **2. Choose an image** — drag & drop a file, click to browse, or click **Try a
 sample image**.
 
-<img src="docs/demo/02-choose-image.png" alt="Image drop zone" width="720">
+<a href="docs/demo/02-choose-image.png"><img src="docs/demo/02-choose-image.png" alt="Image drop zone" width="380"></a>
 
 **3. Choose a model** — pick a **Backend** (COCO-SSD, or a YOLO model) and an
 **Acceleration**. Changing the backend re-runs detection automatically.
 
-<img src="docs/demo/03-choose-model.png" alt="Model and settings panel" width="720">
+<a href="docs/demo/03-choose-model.png"><img src="docs/demo/03-choose-model.png" alt="Model and settings panel" width="380"></a>
 
 **4. Watch it detect** — a spinner overlays the image while the model runs. The
 status badge reads `detecting…`.
 
-<img src="docs/demo/04-loading.png" alt="Detection in progress" width="720">
+<a href="docs/demo/04-loading.png"><img src="docs/demo/04-loading.png" alt="Detection in progress" width="380"></a>
 
 **5. Result** — boxes are drawn over the image, and the Results panel lists each
 object with its confidence, plus a per-class summary and the inference time.
 Tune **Min confidence**, **Max results** and the **Classes** filter to refine.
 
-<img src="docs/demo/05-result.png" alt="Detection result" width="720">
+<a href="docs/demo/05-result.png"><img src="docs/demo/05-result.png" alt="Detection result" width="380"></a>
 
 **6. Export** — download the annotated **PNG**, the results as **JSON** / **CSV**,
 or auto-label the detection as a YOLO **labels `.txt`** / **Dataset `.zip`** for
 training your own model.
 
-<img src="docs/demo/06-export.png" alt="Export panel" width="720">
+<a href="docs/demo/06-export.png"><img src="docs/demo/06-export.png" alt="Export panel" width="380"></a>
 
 ## How it works
 
