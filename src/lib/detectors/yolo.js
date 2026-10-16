@@ -1,28 +1,49 @@
-import * as ort from 'onnxruntime-web/wasm'
 import { imageToCanvas } from '../canvas.js'
 import { letterboxTransform, decodeYolo } from './yoloPost.js'
 import { YOLO_MODELS, resolveModelUrl, numAnchorsOf } from './yoloModels.js'
 
-ort.env.wasm.numThreads = 1
+// Loaded lazily so the default WASM path stays lean: the WebGPU build bundles
+// the larger jsep WASM, so we only fetch it when WebGPU is actually selected.
+const ortCache = new Map()
 
-const sessions = new Map()
-
-function getSession(model) {
-  const url = resolveModelUrl(model)
-  if (!sessions.has(url)) {
-    sessions.set(
-      url,
-      ort.InferenceSession.create(url, {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all',
+function loadOrt(ep) {
+  const which = ep === 'webgpu' ? 'webgpu' : 'wasm'
+  if (!ortCache.has(which)) {
+    const loaded =
+      which === 'webgpu' ? import('onnxruntime-web/webgpu') : import('onnxruntime-web/wasm')
+    ortCache.set(
+      which,
+      loaded.then((mod) => {
+        const ort = mod.default ?? mod
+        ort.env.wasm.numThreads = 1
+        return ort
       }),
     )
   }
-  return sessions.get(url)
+  return ortCache.get(which)
 }
 
-export function preload({ model = YOLO_MODELS[0] } = {}) {
-  return getSession(model)
+const sessions = new Map()
+
+function getSession(model, ep) {
+  const url = resolveModelUrl(model)
+  const key = `${url}|${ep}`
+  if (!sessions.has(key)) {
+    sessions.set(
+      key,
+      loadOrt(ep).then((ort) =>
+        ort.InferenceSession.create(url, {
+          executionProviders: ep === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'],
+          graphOptimizationLevel: 'all',
+        }),
+      ),
+    )
+  }
+  return sessions.get(key)
+}
+
+export function preload({ model = YOLO_MODELS[0], ep = 'wasm' } = {}) {
+  return getSession(model, ep)
 }
 
 function preprocess(image, size) {
@@ -58,9 +79,16 @@ function preprocess(image, size) {
 
 export async function detect(
   image,
-  { model = YOLO_MODELS[0], confThreshold = 0.25, iouThreshold = 0.45, maxDetections = 100 } = {},
+  {
+    model = YOLO_MODELS[0],
+    ep = 'wasm',
+    confThreshold = 0.25,
+    iouThreshold = 0.45,
+    maxDetections = 100,
+  } = {},
 ) {
-  const session = await getSession(model)
+  const session = await getSession(model, ep)
+  const ort = await loadOrt(ep)
   const size = model.inputSize
   const prep = preprocess(image, size)
 
