@@ -388,6 +388,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Export */
+.export__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Class filter */
 .classfilter__actions {
   display: flex;

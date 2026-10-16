@@ -25,6 +25,7 @@ The YOLO row comes from the model registry in
 - Bounding boxes drawn on a canvas with per-class colours
 - Live confidence-threshold and max-results controls
 - Classes filter — pick subjects by category, by name, or search; or select all
+- Export — download the annotated image (PNG) or the results as JSON / CSV
 - Per-image summary with detection counts by class, and inference time
 - Bring your own model: register a self-trained YOLO model to detect your own
   subjects (see [Adding your own subjects](#adding-your-own-subjects))
@@ -63,8 +64,12 @@ npm run preview
   active backend's class list (and optional categories) for the Classes filter.
 - `src/App.jsx` loads the image into an `HTMLImageElement`, runs detection, and
   keeps raw predictions so the confidence and class filters update instantly.
-- `src/components/DetectionCanvas.jsx` renders the image and boxes;
-  `src/components/ResultsPanel.jsx` lists detections and the summary;
+- `src/lib/draw.js` paints boxes + labels onto a 2D context; the on-screen
+  `src/components/DetectionCanvas.jsx` and the export renderer both use it, so
+  they always match.
+- `src/lib/export.js` builds the annotated PNG, and serializes detections to
+  JSON/CSV; `src/components/ExportPanel.jsx` is the export UI.
+- `src/components/ResultsPanel.jsx` lists detections and the summary;
   `src/components/ClassFilter.jsx` is the class/subject picker.
 
 ### Model & WASM hosting
