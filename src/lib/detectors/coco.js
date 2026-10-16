@@ -3,26 +3,27 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd'
 
 const models = new Map()
 
-async function load(backend) {
-  if (!models.has(backend)) {
+async function load(accel) {
+  if (!models.has(accel)) {
     models.set(
-      backend,
+      accel,
       (async () => {
-        await tf.setBackend(backend)
+        const ok = await tf.setBackend(accel)
+        if (!ok) await tf.setBackend('cpu')
         await tf.ready()
         return cocoSsd.load({ base: 'mobilenet_v2' })
       })(),
     )
   }
-  return models.get(backend)
+  return models.get(accel)
 }
 
 export function preload(options = {}) {
-  return load(options.backend || 'cpu')
+  return load(options.accel || 'cpu')
 }
 
-export async function detect(image, { backend = 'cpu', maxResults = 100, minScore = 0.05 } = {}) {
-  const model = await load(backend)
+export async function detect(image, { accel = 'cpu', maxResults = 100, minScore = 0.05 } = {}) {
+  const model = await load(accel)
 
   const start = performance.now()
   const predictions = await model.detect(image, maxResults, minScore)
