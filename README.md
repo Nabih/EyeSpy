@@ -4,14 +4,14 @@ Object detection in the browser. Drop in an image and EyeSpy draws boxes around
 the objects it finds — all processing runs locally on your machine, with no
 uploads and no GPU required.
 
-EyeSpy is a React port of a Node.js `detect.js` CLI, and ships with three
-selectable detection backends:
+EyeSpy is a React port of a Node.js `detect.js` CLI, and ships with two
+selectable detection backends. Each backend then has its own **Acceleration**
+setting:
 
-| Backend | Model | Notes |
+| Backend | Model | Acceleration |
 | --- | --- | --- |
-| **COCO-SSD · CPU** | TensorFlow.js COCO-SSD (MobileNet v2) | Default. 80 classes, pure CPU. |
-| **COCO-SSD · WebGL** | Same model, GPU backend | Faster where WebGL is available. |
-| **YOLOv8n · COCO** | YOLOv8n (ONNX Runtime Web) | 80 classes, runs on the WASM or WebGPU execution provider. |
+| **COCO-SSD** | TensorFlow.js COCO-SSD (MobileNet v2) | Default. 80 classes; CPU or WebGL. |
+| **YOLOv8n · COCO** | YOLOv8n (ONNX Runtime Web) | 80 classes; Auto (WebGPU), WASM or WebGPU. |
 
 The YOLO row comes from the model registry in
 `src/lib/detectors/yoloModels.js`, so you can add your own models — see
@@ -20,7 +20,8 @@ The YOLO row comes from the model registry in
 ## Features
 
 - Runs entirely in the browser — images never leave your device
-- CPU by default; WebGL and ONNX/WASM options where you want them
+- One backend dropdown, one Acceleration dropdown — CPU/WebGL for COCO-SSD,
+  WASM/WebGPU for YOLO
 - Drag & drop or file picker, plus a bundled sample image
 - Live camera mode — continuous detection on your webcam feed with a live FPS
   counter
@@ -62,7 +63,9 @@ npm run preview
   and exposes `runDetection(id, image, options)`. Each backend is imported
   dynamically, so TensorFlow.js and onnxruntime-web are code-split and only
   downloaded when that backend is first used.
-- `src/lib/detectors/coco.js` — TensorFlow.js COCO-SSD.
+- `src/lib/detectors/coco.js` — TensorFlow.js COCO-SSD. The Acceleration
+  setting picks its tf.js backend (`cpu` / `webgl`); `ACCELERATION` in
+  `detect.js` holds the choices for each family.
 - `src/lib/detectors/yolo.js` — any registered YOLO model via onnxruntime-web:
   letterbox preprocessing, raw-tensor decoding and class-wise NMS
   (`yoloPost.js`). Models come from `src/lib/detectors/yoloModels.js`, one
@@ -158,7 +161,8 @@ channel, are not).
 
 - On first use of the COCO-SSD backend its weights are downloaded from a CDN and
   cached by the browser.
-- The `webgl` backend needs a WebGL-capable browser; `cpu` works everywhere.
+- COCO-SSD's WebGL acceleration needs a WebGL-capable browser and falls back to
+  CPU when it isn't available; CPU works everywhere.
 - The ONNX/WASM backend needs SIMD (available in all current evergreen browsers).
 - WebGPU acceleration is offered for the YOLO backend when the browser can
   provide a GPU adapter; otherwise the app falls back to WASM automatically.

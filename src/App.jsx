@@ -12,6 +12,7 @@ import {
   runDetection,
   classesForBackend,
   categoriesForBackend,
+  accelerationFor,
 } from './lib/detect'
 import { COCO_CLASSES } from './lib/cocoClasses'
 import { detectWebGPU } from './lib/capabilities'
@@ -19,7 +20,7 @@ import { detectWebGPU } from './lib/capabilities'
 const EMPTY_RESULT = {
   image: null,
   backend: null,
-  ep: null,
+  accel: null,
   detections: [],
   elapsed: null,
 }
@@ -35,7 +36,7 @@ const LIVE_STATUS = {
 
 export default function App() {
   const [source, setSource] = useState('image')
-  const [backend, setBackend] = useState('coco-cpu')
+  const [backend, setBackend] = useState('coco')
   const [imageEl, setImageEl] = useState(null)
   const [result, setResult] = useState(EMPTY_RESULT)
   const [error, setError] = useState(null)
@@ -46,7 +47,7 @@ export default function App() {
   const [minConfidence, setMinConfidence] = useState(0.5)
   const [maxResults, setMaxResults] = useState(20)
   const [selectedClasses, setSelectedClasses] = useState(() => new Set(COCO_CLASSES))
-  const [accel, setAccel] = useState('auto')
+  const [accel, setAccel] = useState('cpu')
   const [webgpuAvailable, setWebgpuAvailable] = useState(null)
 
   const imageUrlRef = useRef(null)
@@ -54,14 +55,30 @@ export default function App() {
   const backendInfo = getBackend(backend)
   const backendClasses = useMemo(() => classesForBackend(backend), [backend])
   const backendCategories = useMemo(() => categoriesForBackend(backend), [backend])
+  const accelConfig = accelerationFor(backend)
   const isYolo = backendInfo.family === 'yolo'
   const isCamera = source === 'camera'
 
-  // "auto" prefers WebGPU when the browser can provide an adapter, else WASM.
-  const resolvedEp = useMemo(
-    () => (accel === 'wasm' || !webgpuAvailable ? 'wasm' : 'webgpu'),
-    [accel, webgpuAvailable],
+  // Resolve the chosen acceleration to a concrete value: COCO's tf.js backend
+  // (cpu/webgl) or the YOLO execution provider (wasm/webgpu, "auto" prefers a
+  // real WebGPU adapter when one exists).
+  const resolvedAccel = useMemo(() => {
+    if (isYolo) return accel === 'wasm' || !webgpuAvailable ? 'wasm' : 'webgpu'
+    return accel === 'webgl' ? 'webgl' : 'cpu'
+  }, [isYolo, accel, webgpuAvailable])
+
+  const runOptions = useMemo(
+    () => (isYolo ? { ep: resolvedAccel } : { accel: resolvedAccel }),
+    [isYolo, resolvedAccel],
   )
+
+  const accelLabel = isYolo
+    ? resolvedAccel === 'webgpu'
+      ? 'WebGPU'
+      : 'WASM'
+    : resolvedAccel === 'webgl'
+      ? 'WebGL'
+      : 'CPU'
 
   useEffect(() => {
     let active = true
@@ -107,6 +124,8 @@ export default function App() {
     setBackend(next)
     // Each backend emits a different class set, so reset the filter to "all".
     setSelectedClasses(new Set(classesForBackend(next)))
+    // Acceleration means different things per family — start from its default.
+    setAccel(accelerationFor(next).default)
   }, [])
 
   const handleSourceChange = useCallback((next) => {
@@ -120,13 +139,13 @@ export default function App() {
   useEffect(() => {
     if (!imageEl) return
     let cancelled = false
-    runDetection(backend, imageEl, { ep: resolvedEp })
+    runDetection(backend, imageEl, runOptions)
       .then((res) => {
         if (cancelled) return
         setResult({
           image: imageEl,
           backend,
-          ep: resolvedEp,
+          accel: resolvedAccel,
           detections: res.detections,
           elapsed: res.elapsed,
         })
@@ -138,10 +157,11 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [imageEl, backend, resolvedEp])
+  }, [imageEl, backend, runOptions, resolvedAccel])
 
   const busy =
-    !!imageEl && (result.image !== imageEl || result.backend !== backend || result.ep !== resolvedEp)
+    !!imageEl &&
+    (result.image !== imageEl || result.backend !== backend || result.accel !== resolvedAccel)
 
   const detections = useMemo(
     () =>
@@ -191,21 +211,25 @@ export default function App() {
         </select>
       </label>
 
-      {isYolo && (
-        <label className="field">
-          <span>Acceleration</span>
-          <select value={accel} onChange={(e) => setAccel(e.target.value)}>
-            <option value="auto">Auto{webgpuAvailable ? ' — WebGPU' : ' — WASM'}</option>
-            <option value="webgpu" disabled={!webgpuAvailable}>
-              WebGPU
+      <label className="field">
+        <span>Acceleration</span>
+        <select value={accel} onChange={(e) => setAccel(e.target.value)}>
+          {accelConfig.options.map((o) => (
+            <option
+              key={o.value}
+              value={o.value}
+              disabled={isYolo && o.value === 'webgpu' && !webgpuAvailable}
+            >
+              {isYolo && o.value === 'auto'
+                ? `Auto${webgpuAvailable ? ' — WebGPU' : ' — WASM'}`
+                : o.label}
             </option>
-            <option value="wasm">WASM (CPU)</option>
-          </select>
-          {webgpuAvailable === false && (
-            <span className="field__hint">WebGPU unavailable in this browser — using WASM.</span>
-          )}
-        </label>
-      )}
+          ))}
+        </select>
+        {isYolo && webgpuAvailable === false && (
+          <span className="field__hint">WebGPU unavailable in this browser — using WASM.</span>
+        )}
+      </label>
 
       <label className="field">
         <span>
@@ -257,9 +281,7 @@ export default function App() {
         </div>
         <div className="app__badges">
           <span className="backend">{backendInfo.label}</span>
-          {isYolo && (
-            <span className="backend">{resolvedEp === 'webgpu' ? 'WebGPU' : 'WASM'}</span>
-          )}
+          <span className="backend">{accelLabel}</span>
           <span className={`backend backend--${statusKind}`}>{statusLabel}</span>
         </div>
       </header>
@@ -294,7 +316,7 @@ export default function App() {
           <>
             <LiveStage
               backend={backend}
-              ep={resolvedEp}
+              options={runOptions}
               minConfidence={minConfidence}
               maxResults={maxResults}
               selectedClasses={selectedClasses}

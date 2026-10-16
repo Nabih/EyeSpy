@@ -9,16 +9,9 @@ import { YOLO_MODELS } from './detectors/yoloModels.js'
 
 const COCO_BACKENDS = [
   {
-    id: 'coco-cpu',
-    label: 'COCO-SSD · CPU',
+    id: 'coco',
+    label: 'COCO-SSD',
     family: 'coco',
-    options: { backend: 'cpu' },
-  },
-  {
-    id: 'coco-webgl',
-    label: 'COCO-SSD · WebGL',
-    family: 'coco',
-    options: { backend: 'webgl' },
   },
 ]
 
@@ -31,6 +24,34 @@ const YOLO_BACKENDS = YOLO_MODELS.map((model) => ({
 }))
 
 export const BACKENDS = [...COCO_BACKENDS, ...YOLO_BACKENDS]
+
+/**
+ * Acceleration choices per backend family. COCO-SSD picks a TensorFlow.js
+ * backend; YOLO picks an ONNX Runtime execution provider. Kept in one place so
+ * the UI and the detectors agree on the values.
+ */
+export const ACCELERATION = {
+  coco: {
+    default: 'cpu',
+    options: [
+      { value: 'cpu', label: 'CPU' },
+      { value: 'webgl', label: 'WebGL' },
+    ],
+  },
+  yolo: {
+    default: 'auto',
+    options: [
+      { value: 'auto', label: 'Auto' },
+      { value: 'webgpu', label: 'WebGPU' },
+      { value: 'wasm', label: 'WASM (CPU)' },
+    ],
+  },
+}
+
+/** Acceleration config for a backend id. */
+export function accelerationFor(id) {
+  return ACCELERATION[getBackend(id).family] || ACCELERATION.coco
+}
 
 const LOADERS = {
   coco: () => import('./detectors/coco.js'),

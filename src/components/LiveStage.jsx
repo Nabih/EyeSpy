@@ -25,7 +25,7 @@ function cameraMessage(err) {
  */
 export default function LiveStage({
   backend,
-  ep,
+  options,
   minConfidence,
   maxResults,
   selectedClasses,
@@ -39,10 +39,10 @@ export default function LiveStage({
   const [fps, setFps] = useState(0)
 
   // Latest detection settings, read by the loop without restarting the camera.
-  const paramsRef = useRef({ backend, ep, minConfidence, maxResults, selectedClasses })
+  const paramsRef = useRef({ backend, options, minConfidence, maxResults, selectedClasses })
   useEffect(() => {
-    paramsRef.current = { backend, ep, minConfidence, maxResults, selectedClasses }
-  }, [backend, ep, minConfidence, maxResults, selectedClasses])
+    paramsRef.current = { backend, options, minConfidence, maxResults, selectedClasses }
+  }, [backend, options, minConfidence, maxResults, selectedClasses])
 
   const fpsRef = useRef(0)
 
@@ -68,11 +68,11 @@ export default function LiveStage({
         return
       }
 
-      const { backend, ep, minConfidence, maxResults, selectedClasses } = paramsRef.current
+      const { backend, options, minConfidence, maxResults, selectedClasses } = paramsRef.current
 
       let res
       try {
-        res = await runDetection(backend, video, { ep })
+        res = await runDetection(backend, video, options)
       } catch (err) {
         if (cancelled) return
         onError?.(err.message || 'Detection failed.')
