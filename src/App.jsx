@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import ImageUploader from './components/ImageUploader'
 import DetectionCanvas from './components/DetectionCanvas'
+import LiveStage from './components/LiveStage'
 import ResultsPanel from './components/ResultsPanel'
 import ClassFilter from './components/ClassFilter'
 import ExportPanel from './components/ExportPanel'
@@ -23,12 +24,24 @@ const EMPTY_RESULT = {
   elapsed: null,
 }
 
+const EMPTY_LIVE = { detections: [], elapsed: null }
+
+const LIVE_STATUS = {
+  starting: 'starting…',
+  live: 'live',
+  error: 'error',
+  idle: 'idle',
+}
+
 export default function App() {
+  const [source, setSource] = useState('image')
   const [backend, setBackend] = useState('coco-cpu')
   const [imageEl, setImageEl] = useState(null)
   const [result, setResult] = useState(EMPTY_RESULT)
   const [error, setError] = useState(null)
   const [imageName, setImageName] = useState(null)
+  const [live, setLive] = useState(EMPTY_LIVE)
+  const [liveStatus, setLiveStatus] = useState('idle')
 
   const [minConfidence, setMinConfidence] = useState(0.5)
   const [maxResults, setMaxResults] = useState(20)
@@ -42,6 +55,7 @@ export default function App() {
   const backendClasses = useMemo(() => classesForBackend(backend), [backend])
   const backendCategories = useMemo(() => categoriesForBackend(backend), [backend])
   const isYolo = backendInfo.family === 'yolo'
+  const isCamera = source === 'camera'
 
   // "auto" prefers WebGPU when the browser can provide an adapter, else WASM.
   const resolvedEp = useMemo(
@@ -95,6 +109,14 @@ export default function App() {
     setSelectedClasses(new Set(classesForBackend(next)))
   }, [])
 
+  const handleSourceChange = useCallback((next) => {
+    setError(null)
+    if (next === 'image') setLiveStatus('idle')
+    setSource(next)
+  }, [])
+
+  const handleLiveUpdate = useCallback((update) => setLive(update), [])
+
   useEffect(() => {
     if (!imageEl) return
     let cancelled = false
@@ -129,7 +151,100 @@ export default function App() {
     [result.detections, minConfidence, maxResults, selectedClasses],
   )
 
-  const statusLabel = error ? 'error' : !imageEl ? 'idle' : busy ? 'detecting…' : 'ready'
+  const statusLabel = isCamera
+    ? LIVE_STATUS[liveStatus] ?? 'idle'
+    : error
+      ? 'error'
+      : !imageEl
+        ? 'idle'
+        : busy
+          ? 'detecting…'
+          : 'ready'
+
+  const statusKind = isCamera
+    ? liveStatus === 'live'
+      ? 'ready'
+      : liveStatus === 'error'
+        ? 'error'
+        : liveStatus === 'starting'
+          ? 'loading'
+          : 'ready'
+    : error
+      ? 'error'
+      : busy
+        ? 'loading'
+        : 'ready'
+
+  const split = isCamera || !!imageEl
+
+  const settingsPanel = (
+    <section className="panel">
+      <h2>Model &amp; settings</h2>
+      <label className="field">
+        <span>Backend</span>
+        <select value={backend} onChange={(e) => handleBackendChange(e.target.value)}>
+          {BACKENDS.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {isYolo && (
+        <label className="field">
+          <span>Acceleration</span>
+          <select value={accel} onChange={(e) => setAccel(e.target.value)}>
+            <option value="auto">Auto{webgpuAvailable ? ' — WebGPU' : ' — WASM'}</option>
+            <option value="webgpu" disabled={!webgpuAvailable}>
+              WebGPU
+            </option>
+            <option value="wasm">WASM (CPU)</option>
+          </select>
+          {webgpuAvailable === false && (
+            <span className="field__hint">WebGPU unavailable in this browser — using WASM.</span>
+          )}
+        </label>
+      )}
+
+      <label className="field">
+        <span>
+          Min confidence <strong>{minConfidence.toFixed(2)}</strong>
+        </span>
+        <input
+          type="range"
+          min="0.05"
+          max="0.95"
+          step="0.05"
+          value={minConfidence}
+          onChange={(e) => setMinConfidence(parseFloat(e.target.value))}
+        />
+      </label>
+
+      <label className="field">
+        <span>
+          Max results <strong>{maxResults}</strong>
+        </span>
+        <input
+          type="range"
+          min="1"
+          max="50"
+          step="1"
+          value={maxResults}
+          onChange={(e) => setMaxResults(parseInt(e.target.value, 10))}
+        />
+      </label>
+    </section>
+  )
+
+  const classFilter = (
+    <ClassFilter
+      selected={selectedClasses}
+      onChange={setSelectedClasses}
+      classes={backendClasses}
+      categories={backendCategories}
+    />
+  )
 
   return (
     <div className="app">
@@ -145,9 +260,7 @@ export default function App() {
           {isYolo && (
             <span className="backend">{resolvedEp === 'webgpu' ? 'WebGPU' : 'WASM'}</span>
           )}
-          <span className={`backend backend--${error ? 'error' : busy ? 'loading' : 'ready'}`}>
-            {statusLabel}
-          </span>
+          <span className={`backend backend--${statusKind}`}>{statusLabel}</span>
         </div>
       </header>
 
@@ -157,8 +270,45 @@ export default function App() {
         </div>
       )}
 
-      <main className={`app__main${imageEl ? ' app__main--split' : ''}`}>
-        {!imageEl ? (
+      <div className="sourcetabs" role="group" aria-label="Detection source">
+        <button
+          type="button"
+          className="sourcetabs__tab"
+          aria-pressed={!isCamera}
+          onClick={() => handleSourceChange('image')}
+        >
+          Image
+        </button>
+        <button
+          type="button"
+          className="sourcetabs__tab"
+          aria-pressed={isCamera}
+          onClick={() => handleSourceChange('camera')}
+        >
+          Live camera
+        </button>
+      </div>
+
+      <main className={`app__main${split ? ' app__main--split' : ''}`}>
+        {isCamera ? (
+          <>
+            <LiveStage
+              backend={backend}
+              ep={resolvedEp}
+              minConfidence={minConfidence}
+              maxResults={maxResults}
+              selectedClasses={selectedClasses}
+              onUpdate={handleLiveUpdate}
+              onStatus={setLiveStatus}
+              onError={setError}
+            />
+            <aside className="sidebar">
+              {settingsPanel}
+              {classFilter}
+              <ResultsPanel detections={live.detections} elapsed={live.elapsed} busy={false} />
+            </aside>
+          </>
+        ) : !imageEl ? (
           <ImageUploader onSelect={handleSelect} onSample={handleSample} />
         ) : (
           <>
@@ -178,84 +328,9 @@ export default function App() {
             </div>
 
             <aside className="sidebar">
-              <section className="panel">
-                <h2>Model &amp; settings</h2>
-                <label className="field">
-                  <span>Backend</span>
-                  <select
-                    value={backend}
-                    onChange={(e) => handleBackendChange(e.target.value)}
-                  >
-                    {BACKENDS.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {isYolo && (
-                  <label className="field">
-                    <span>Acceleration</span>
-                    <select value={accel} onChange={(e) => setAccel(e.target.value)}>
-                      <option value="auto">
-                        Auto{webgpuAvailable ? ' — WebGPU' : ' — WASM'}
-                      </option>
-                      <option value="webgpu" disabled={!webgpuAvailable}>
-                        WebGPU
-                      </option>
-                      <option value="wasm">WASM (CPU)</option>
-                    </select>
-                    {webgpuAvailable === false && (
-                      <span className="field__hint">
-                        WebGPU unavailable in this browser — using WASM.
-                      </span>
-                    )}
-                  </label>
-                )}
-
-                <label className="field">
-                  <span>
-                    Min confidence <strong>{minConfidence.toFixed(2)}</strong>
-                  </span>
-                  <input
-                    type="range"
-                    min="0.05"
-                    max="0.95"
-                    step="0.05"
-                    value={minConfidence}
-                    onChange={(e) => setMinConfidence(parseFloat(e.target.value))}
-                  />
-                </label>
-
-                <label className="field">
-                  <span>
-                    Max results <strong>{maxResults}</strong>
-                  </span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="50"
-                    step="1"
-                    value={maxResults}
-                    onChange={(e) => setMaxResults(parseInt(e.target.value, 10))}
-                  />
-                </label>
-              </section>
-
-              <ClassFilter
-                selected={selectedClasses}
-                onChange={setSelectedClasses}
-                classes={backendClasses}
-                categories={backendCategories}
-              />
-
-              <ResultsPanel
-                detections={detections}
-                elapsed={result.elapsed}
-                busy={busy}
-              />
-
+              {settingsPanel}
+              {classFilter}
+              <ResultsPanel detections={detections} elapsed={result.elapsed} busy={busy} />
               <ExportPanel
                 image={imageEl}
                 detections={detections}

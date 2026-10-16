@@ -22,6 +22,8 @@ The YOLO row comes from the model registry in
 - Runs entirely in the browser — images never leave your device
 - CPU by default; WebGL and ONNX/WASM options where you want them
 - Drag & drop or file picker, plus a bundled sample image
+- Live camera mode — continuous detection on your webcam feed with a live FPS
+  counter
 - Bounding boxes drawn on a canvas with per-class colours
 - Live confidence-threshold and max-results controls
 - Classes filter — pick subjects by category, by name, or search; or select all
@@ -42,7 +44,7 @@ npm run dev
 ```
 
 Then open the printed URL (usually http://localhost:5173). Click **Try a sample
-image**, or drop in your own.
+image**, drop in your own, or switch to **Live camera** to detect on your webcam.
 
 ### Production build
 
@@ -67,6 +69,11 @@ npm run preview
   active backend's class list (and optional categories) for the Classes filter.
 - `src/App.jsx` loads the image into an `HTMLImageElement`, runs detection, and
   keeps raw predictions so the confidence and class filters update instantly.
+- `src/components/LiveStage.jsx` drives live camera mode: `getUserMedia`, a
+  sequential detect-then-draw loop (one frame in flight), and an FPS counter.
+  The video element is shown directly and boxes are overlaid on a canvas sized
+  to the video's native resolution. `src/lib/canvas.js` accepts video elements
+  so the ONNX backend can preprocess frames too.
 - `src/lib/draw.js` paints boxes + labels onto a 2D context; the on-screen
   `src/components/DetectionCanvas.jsx` and the export renderer both use it, so
   they always match.
@@ -143,6 +150,9 @@ channel, are not).
 - The ONNX/WASM backend needs SIMD (available in all current evergreen browsers).
 - WebGPU acceleration is offered for the YOLO backend when the browser can
   provide a GPU adapter; otherwise the app falls back to WASM automatically.
+- Live camera mode needs camera permission and a secure context (localhost or
+  HTTPS). Exporting is image-only; the annotated PNG / JSON / CSV buttons are
+  hidden while the camera is running.
 
 ## Credits
 
