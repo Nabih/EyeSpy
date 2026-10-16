@@ -1,4 +1,5 @@
 import { drawDetections } from './draw'
+import { imageExtension } from './dataset.js'
 
 /** Render the image + detections to an offscreen canvas at the image's natural size. */
 export function renderAnnotated(image, detections) {
@@ -76,6 +77,26 @@ export function detectionsToCSV({ detections }) {
     ])
   })
   return `${rows.map((r) => r.map(csvCell).join(',')).join('\n')}\n`
+}
+
+/**
+ * Original bytes of an image element (so the dataset keeps the source file),
+ * falling back to a PNG re-encode when the source can't be fetched.
+ * @returns {Promise<{bytes: Uint8Array, ext: string}>}
+ */
+export async function imageToBytes(image, name) {
+  try {
+    const res = await fetch(image.src)
+    if (res.ok) return { bytes: new Uint8Array(await res.arrayBuffer()), ext: imageExtension(name) }
+  } catch {
+    /* cross-origin or opaque source — fall through to canvas */
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = image.naturalWidth || image.width
+  canvas.height = image.naturalHeight || image.height
+  canvas.getContext('2d').drawImage(image, 0, 0)
+  const blob = await canvasToBlob(canvas)
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), ext: '.png' }
 }
 
 export function downloadBlob(blob, filename) {

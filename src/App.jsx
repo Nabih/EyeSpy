@@ -334,6 +334,7 @@ export default function App() {
               <ExportPanel
                 image={imageEl}
                 detections={detections}
+                classes={backendClasses}
                 meta={{ name: imageName, backend: backendInfo.label, elapsed: result.elapsed }}
                 disabled={busy}
               />
