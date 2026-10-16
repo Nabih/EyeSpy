@@ -11,7 +11,7 @@ selectable detection backends:
 | --- | --- | --- |
 | **COCO-SSD · CPU** | TensorFlow.js COCO-SSD (MobileNet v2) | Default. 80 classes, pure CPU. |
 | **COCO-SSD · WebGL** | Same model, GPU backend | Faster where WebGL is available. |
-| **YOLOv8n · COCO** | YOLOv8n (ONNX Runtime Web) | 80 classes, runs on the WASM execution provider. |
+| **YOLOv8n · COCO** | YOLOv8n (ONNX Runtime Web) | 80 classes, runs on the WASM or WebGPU execution provider. |
 
 The YOLO row comes from the model registry in
 `src/lib/detectors/yoloModels.js`, so you can add your own models — see
@@ -26,6 +26,8 @@ The YOLO row comes from the model registry in
 - Live confidence-threshold and max-results controls
 - Classes filter — pick subjects by category, by name, or search; or select all
 - Export — download the annotated image (PNG) or the results as JSON / CSV
+- Optional WebGPU acceleration for the YOLO backend, with automatic fallback to
+  WASM when no GPU adapter is available
 - Per-image summary with detection counts by class, and inference time
 - Bring your own model: register a self-trained YOLO model to detect your own
   subjects (see [Adding your own subjects](#adding-your-own-subjects))
@@ -59,7 +61,8 @@ npm run preview
 - `src/lib/detectors/yolo.js` — any registered YOLO model via onnxruntime-web:
   letterbox preprocessing, raw-tensor decoding and class-wise NMS
   (`yoloPost.js`). Models come from `src/lib/detectors/yoloModels.js`, one
-  backend per entry.
+  backend per entry. The execution provider is selectable per run (`wasm` or
+  `webgpu`); `src/lib/capabilities.js` detects whether WebGPU is usable.
 - `classesForBackend(id)` / `categoriesForBackend(id)` in `detect.js` give the
   active backend's class list (and optional categories) for the Classes filter.
 - `src/App.jsx` loads the image into an `HTMLImageElement`, runs detection, and
@@ -79,6 +82,9 @@ npm run preview
 - onnxruntime-web is imported via its `/wasm` subpath, so Vite bundles the
   matching WASM binary as an asset and rewrites the runtime URL — no CDN and no
   manual WASM hosting required.
+- The WebGPU build (`onnxruntime-web/webgpu`) is imported *lazily*, only when
+  WebGPU is actually selected, so the default WASM path never downloads the
+  larger WebGPU runtime.
 
 ## Adding your own subjects
 
@@ -135,6 +141,8 @@ channel, are not).
   cached by the browser.
 - The `webgl` backend needs a WebGL-capable browser; `cpu` works everywhere.
 - The ONNX/WASM backend needs SIMD (available in all current evergreen browsers).
+- WebGPU acceleration is offered for the YOLO backend when the browser can
+  provide a GPU adapter; otherwise the app falls back to WASM automatically.
 
 ## Credits
 

@@ -13,10 +13,12 @@ import {
   categoriesForBackend,
 } from './lib/detect'
 import { COCO_CLASSES } from './lib/cocoClasses'
+import { detectWebGPU } from './lib/capabilities'
 
 const EMPTY_RESULT = {
   image: null,
   backend: null,
+  ep: null,
   detections: [],
   elapsed: null,
 }
@@ -31,12 +33,29 @@ export default function App() {
   const [minConfidence, setMinConfidence] = useState(0.5)
   const [maxResults, setMaxResults] = useState(20)
   const [selectedClasses, setSelectedClasses] = useState(() => new Set(COCO_CLASSES))
+  const [accel, setAccel] = useState('auto')
+  const [webgpuAvailable, setWebgpuAvailable] = useState(null)
 
   const imageUrlRef = useRef(null)
 
   const backendInfo = getBackend(backend)
   const backendClasses = useMemo(() => classesForBackend(backend), [backend])
   const backendCategories = useMemo(() => categoriesForBackend(backend), [backend])
+  const isYolo = backendInfo.family === 'yolo'
+
+  // "auto" prefers WebGPU when the browser can provide an adapter, else WASM.
+  const resolvedEp = useMemo(
+    () => (accel === 'wasm' || !webgpuAvailable ? 'wasm' : 'webgpu'),
+    [accel, webgpuAvailable],
+  )
+
+  useEffect(() => {
+    let active = true
+    detectWebGPU().then((ok) => active && setWebgpuAvailable(ok))
+    return () => {
+      active = false
+    }
+  }, [])
 
   const loadImage = useCallback((url, { revoke = false, name = null } = {}) => {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current)
@@ -79,12 +98,13 @@ export default function App() {
   useEffect(() => {
     if (!imageEl) return
     let cancelled = false
-    runDetection(backend, imageEl)
+    runDetection(backend, imageEl, { ep: resolvedEp })
       .then((res) => {
         if (cancelled) return
         setResult({
           image: imageEl,
           backend,
+          ep: resolvedEp,
           detections: res.detections,
           elapsed: res.elapsed,
         })
@@ -96,9 +116,10 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [imageEl, backend])
+  }, [imageEl, backend, resolvedEp])
 
-  const busy = !!imageEl && (result.image !== imageEl || result.backend !== backend)
+  const busy =
+    !!imageEl && (result.image !== imageEl || result.backend !== backend || result.ep !== resolvedEp)
 
   const detections = useMemo(
     () =>
@@ -121,6 +142,9 @@ export default function App() {
         </div>
         <div className="app__badges">
           <span className="backend">{backendInfo.label}</span>
+          {isYolo && (
+            <span className="backend">{resolvedEp === 'webgpu' ? 'WebGPU' : 'WASM'}</span>
+          )}
           <span className={`backend backend--${error ? 'error' : busy ? 'loading' : 'ready'}`}>
             {statusLabel}
           </span>
@@ -169,6 +193,26 @@ export default function App() {
                     ))}
                   </select>
                 </label>
+
+                {isYolo && (
+                  <label className="field">
+                    <span>Acceleration</span>
+                    <select value={accel} onChange={(e) => setAccel(e.target.value)}>
+                      <option value="auto">
+                        Auto{webgpuAvailable ? ' — WebGPU' : ' — WASM'}
+                      </option>
+                      <option value="webgpu" disabled={!webgpuAvailable}>
+                        WebGPU
+                      </option>
+                      <option value="wasm">WASM (CPU)</option>
+                    </select>
+                    {webgpuAvailable === false && (
+                      <span className="field__hint">
+                        WebGPU unavailable in this browser — using WASM.
+                      </span>
+                    )}
+                  </label>
+                )}
 
                 <label className="field">
                   <span>
