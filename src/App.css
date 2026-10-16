@@ -475,6 +475,20 @@
   gap: 8px;
 }
 
+.export__actions--stack {
+  margin-top: 8px;
+}
+
+.export__hint {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.export__hint code {
+  font-size: 11px;
+}
+
 /* Class filter */
 .classfilter__actions {
   display: flex;

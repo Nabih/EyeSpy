@@ -28,6 +28,9 @@ The YOLO row comes from the model registry in
 - Live confidence-threshold and max-results controls
 - Classes filter — pick subjects by category, by name, or search; or select all
 - Export — download the annotated image (PNG) or the results as JSON / CSV
+- Auto-label — turn the current detections into a YOLO training sample: a
+  labels `.txt`, or a full dataset `.zip` (image + labels + `classes.txt` +
+  `data.yaml`)
 - Optional WebGPU acceleration for the YOLO backend, with automatic fallback to
   WASM when no GPU adapter is available
 - Per-image summary with detection counts by class, and inference time
@@ -79,6 +82,10 @@ npm run preview
   they always match.
 - `src/lib/export.js` builds the annotated PNG, and serializes detections to
   JSON/CSV; `src/components/ExportPanel.jsx` is the export UI.
+- `src/lib/dataset.js` auto-labels the current detections as YOLO-format lines
+  (`class_index cx cy w h`, normalised) and assembles a dataset (image, labels,
+  `classes.txt`, `data.yaml`); `src/lib/zip.js` is a tiny STORE-mode ZIP writer
+  so the dataset downloads as one file without an extra dependency.
 - `src/components/ResultsPanel.jsx` lists detections and the summary;
   `src/components/ClassFilter.jsx` is the class/subject picker.
 
@@ -98,6 +105,11 @@ npm run preview
 The COCO backends can only ever report the 80 COCO classes. To detect your own
 subjects, drop in a YOLO model trained on them — it becomes a selectable
 backend with its own class list and Classes filter.
+
+To bootstrap that training set, use an existing model to **auto-label**: run a
+detection, tune the confidence/Classes filters, then **Export → Dataset (.zip)**.
+The archive holds the image, its YOLO labels, `classes.txt` and `data.yaml`,
+ready to hand to the trainer above.
 
 1. **Train** a YOLOv8 / YOLO11 detection model on your labelled images, e.g.
    with [Ultralytics](https://docs.ultralytics.com):
